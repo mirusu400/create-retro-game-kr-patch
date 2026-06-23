@@ -306,7 +306,7 @@ CUE의 `INDEX MM:SS:FF`는 `(MM*60+SS)*75+FF` 섹터다. 디스크 레이아웃:
 
 - **EDC**: 섹터 오프셋 `0x000`-`0x80F`(Sync+Header+User Data, 2064바이트)에 대한 CD-ROM 전용 CRC-32. 다항식 `x^32+x^31+x^16+x^15+x^4+x^3+x+1`, 테이블 구현 시 반전 상수 `0xD8018001`, 결과는 little-endian으로 `0x810`에 기록.
 - **ECC**: Reed-Solomon Product Code. P-parity 172바이트(Header+User Data 대상), Q-parity 104바이트(Header+User Data+P 대상).
-- 에뮬레이터(Mednafen 등)는 일반적으로 EDC/ECC를 무시하므로 에뮬레이터 검증 단계에서는 생략 가능하다. 실기 구동을 목표로 하면 반드시 전 데이터 섹터를 재계산한다. 저장 시 데이터 트랙 전체를 일괄 재계산하는 것이 안전하다.
+- 에뮬레이터(Mednafen 등)는 일반적으로 EDC/ECC를 무시하므로 에뮬레이터 검증 단계에서는 생략 가능하다. 실기 구동을 목표로 하면 변경한 섹터의 EDC/ECC를 재계산한다. 단 전 데이터 섹터를 무조건 일괄 재계산하지는 않는다 — 의도적으로 틀린 EDC/ECC를 카피 프로텍션으로 쓰는 게임이 있어, 일괄 재계산이 그 의도적 오류를 정정해 보호 검사를 깨뜨릴 수 있다(`references/strategy/build-and-verify.md`의 EDC/ECC 절 참조). 변경 섹터만 재계산하고 원본의 의도적 오류 섹터는 보존한다.
 
 ## 8. 패치 포맷과 빌드
 
