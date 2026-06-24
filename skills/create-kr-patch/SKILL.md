@@ -5,7 +5,7 @@ description: >-
   from ROM/disc analysis, text-engine reverse engineering, Hangul font/encoding
   design, PoC, text extraction/translation/reinsertion, pointer relocation, ASM
   hooks, build & patch generation, to emulator verification. 레트로 게임(SNES,
-  메가드라이브, 새턴, PS1, 드림캐스트, PC엔진, PC-98, 게임기어 등 콘솔·PC 불문)의
+  메가드라이브, 새턴, PS1, 드림캐스트, PC엔진, PC-98, 게임기어, 닌텐도 DS 등
   한글 패치 제작 전 과정 — ROM/디스크 분석, 텍스트 엔진 역공학, 한글 폰트·인코딩
   설계, PoC, 텍스트 추출·번역·재삽입, 포인터 재배치, ASM 훅, 빌드·패치 생성,
   에뮬레이터 검증. 트리거 키워드 예: "한글화", "한글 패치", "KR patch", "ROM 번역",
@@ -87,6 +87,7 @@ digraph kr_patch {
 | PC엔진 / CD-ROM² | `references/platforms/pce.md` | HuC6280 (65C02 슈퍼셋) / HuCard·CD-ROM |
 | PC-98 | `references/platforms/pc98.md` | 8086/V30 리얼 모드 / 플로피 디스크 |
 | 게임기어 | `references/platforms/gg.md` | Z80A / ROM 카트리지 |
+| 닌텐도 DS | `references/platforms/nds.md` | ARM9+ARM7 / ROM 카트리지 (NitroFS) |
 
 목록에 없는 플랫폼이면 strategy 축의 조사 순서·검증 원칙만 출발점으로 삼고, 하드웨어·매체·주소공간·렌더링 경로에 대한 가정은 새로 확정한다. `references/platforms/` 아래에 해당 플랫폼 문서를 새로 작성하되, 골격은 기존 8개 문서의 목차를 직접 따른다 — 공통적으로 플랫폼 개요 → 메모리 맵·뱅킹 → 비디오·폰트 경로 → 텍스트 엔진 패턴 → 한글 인코딩·운용 → 패치 패턴 → 빌드 → 검증(에뮬레이터·디버거) → 사례 요약의 9~10절이다. 신규 작성 시 개요·메모리·비디오 절은 공개 하드웨어 자료로 먼저 채우고, 게임 분석 절(텍스트 엔진·인코딩·사례)은 조사가 진행되는 대로 추가한다.
 
