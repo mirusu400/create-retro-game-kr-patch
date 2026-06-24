@@ -39,8 +39,8 @@
 
 | 영역 | 주소 범위 | 크기 | 비고 |
 |------|-----------|------|------|
-| ARM9 ITCM | 0x01000000 (기본) | 32KB | 명령 캐시 대용, 인터럽트 벡터 |
-| ARM9 DTCM | 0x0B000000 (기본, 재배치 가능) | 16KB | 스택, 빠른 변수 |
+| ARM9 ITCM | 0x00000000 (고정) | 32KB | 명령 캐시 대용, 인터럽트 벡터. CP15로 크기만 설정 가능, base 재배치 불가 |
+| ARM9 DTCM | 0x03000000 (SDK 기본, CP15로 재배치 가능) | 16KB | 스택, 빠른 변수. devkitPro는 0x02FF0000 사용 |
 | 메인 RAM | 0x02000000-0x023FFFFF | 4MB | ARM9/ARM7 공유 |
 | 공유 WRAM | 0x03000000 | 32KB | ARM9/ARM7 분할 |
 | ARM9 I/O | 0x04000000 | — | 2D 엔진·DMA·타이머 레지스터 |
@@ -161,6 +161,47 @@ data/
 ```
 
 **핵심**: 많은 NDS 게임에서 텍스트 수정은 ARM 바이너리 해킹이 아니라 **NitroFS 내 데이터 파일 교체**로 해결된다. 바이너리 훅은 인코딩 확장·폰트 경로 변경 등 파일 교체만으로 안 되는 경우에 쓴다.
+
+### Nitro SDK 표준 리소스 포맷
+
+NDS 게임 대부분이 사용하는 닌텐도 SDK 표준 리소스 포맷 목록이다. 매직 시그니처로 식별할 수 있다.
+
+| 포맷 | 매직 | 용도 | 한글화 관련도 |
+|------|------|------|-------------|
+| NFTR | `RTFN` | 폰트 (글리프+폭+매핑) | ★★★ 한글 글리프 추가 대상 |
+| BMG | `MESGbmg1` | 텍스트 메시지 (UTF-16 기반) | ★★★ 텍스트 교체 대상 |
+| NARC | `NARC` | 파일 아카이브 (NitroFS 내 하위 묶음) | ★★ 리소스 해제/재조립 |
+| NCGR | `RGCN` | 타일 그래픽 (2D 캐릭터) | ★★ 그래픽 텍스트 수정 시 |
+| NSCR | `RCSN` | 타일맵 (2D 스크린) | ★ 타일맵 BG 텍스트 |
+| NCLR | `RLCN` | 팔레트 | ★ 색상 변경 시 |
+| NCER | `RECN` | 스프라이트 셀 (OBJ 배치) | ★ OBJ 기반 텍스트 |
+| NANR | `RNAN` | 스프라이트 애니메이션 | — 텍스트 애니메이션 시 |
+
+### BMG (Binary Message Group) 포맷
+
+닌텐도 SDK의 **표준 텍스트 메시지 포맷**이다. 마리오 카트 DS, 포켓몬 다이아몬드/펄 등 SDK 기반 게임 다수가 BMG로 텍스트를 저장한다.
+
+```
+MESGbmg1 헤더 (32B)
+├─ INF1 (Info): 메시지 인덱스·속성 (각 메시지의 DAT1 내 오프셋)
+├─ DAT1 (Data): 문자열 데이터 (보통 UTF-16LE, null-terminated)
+└─ MID1 (Message ID): 메시지 ID 배열 (선택적 섹션)
+```
+
+**한글화에서의 이점**: BMG는 UTF-16LE 기반이므로 한글 코드포인트(U+AC00~U+D7A3)를 인코딩 훅 없이 직접 넣을 수 있다. 폰트에 한글 글리프만 추가하면 된다. INF1의 오프셋과 DAT1의 문자열만 교체/갱신하면 텍스트 교체가 완료된다.
+
+### NARC (Nitro Archive) 포맷
+
+NitroFS 내에서 여러 파일을 하나로 묶는 아카이브 포맷이다. 스크립트·폰트·그래픽이 NARC 안에 들어 있는 경우가 흔하다.
+
+```
+NARC 헤더 (16B, 매직 "NARC", BOM 0xFFFE, 섹션 3개)
+├─ BTAF (FATB): 파일 오프셋/크기 테이블
+├─ BTNF (FNTB): 파일명 테이블 (생략 가능 — 없으면 인덱스로만 접근)
+└─ GMIF (FIMG): 실제 파일 데이터 연결 (4바이트 정렬)
+```
+
+NARC 내 파일을 수정하면 BTAF의 오프셋을 재계산해야 한다. Tinke(GUI) 또는 ndspy(Python 라이브러리)로 처리할 수 있다.
 
 ### NFTR 폰트 포맷
 
@@ -308,15 +349,17 @@ NDS ROM(.nds)은 다음 구조다:
 
 ### 핵심 도구
 
-| 도구 | 용도 |
-|------|------|
-| **ndstool** | ROM 분해(`-x`) / 재조립(`-c`). NitroFS 파일 추출·교체의 표준 |
-| **Tinke** | GUI 기반 NDS 리소스 뷰어/에디터. NFTR·NCGR·NSCR 등 닌텐도 포맷 지원 |
-| **CrystalTile2** | GUI 기반 타일 에디터. NDS ROM 직접 편집, 폰트 타일 시각화 |
-| **Kuriimu2 / KapPokemon's tools** | NFTR 폰트 편집, 닌텐도 포맷 변환 |
-| **xdelta / BPS** | 패치 파일 생성·적용 |
-| **arm-none-eabi-gcc/as** | ARM 크로스 컴파일러/어셈블러. 훅 코드 작성 |
-| **Ghidra / IDA** | ARM9/오버레이 디스어셈블리·디컴파일 |
+| 도구 | 유형 | 용도 |
+|------|------|------|
+| **ndstool** | CLI | ROM 분해(`-x`) / 재조립(`-c`). NitroFS 파일 추출·교체의 표준. devkitPro에 포함 |
+| **ndspy** | Python 라이브러리 | NDS ROM·NARC·BMG·NFTR 등을 Python에서 직접 조작. 스크립팅 자동화에 적합 |
+| **Tinke** | GUI | NDS 리소스 뷰어/에디터. NFTR·NCGR·NSCR·NARC 등 닌텐도 포맷 지원 |
+| **CrystalTile2** | GUI | 타일 에디터. NDS ROM 직접 편집, 폰트 타일 시각화 |
+| **Kuriimu2** | GUI/CLI | 닌텐도 포맷 변환·편집. NFTR 폰트, BMG 텍스트 등 지원 |
+| **blz** | CLI | ARM9 BLZ 압축 해제/재압축. devkitPro general-tools에 포함 |
+| **xdelta3 / Flips** | CLI | 패치 파일 생성·적용. xdelta3가 NDS 씬 주류 |
+| **arm-none-eabi-gcc/as** | CLI | ARM 크로스 컴파일러/어셈블러. 훅 코드 작성. devkitPro에 포함 |
+| **Ghidra** | GUI | ARM9/오버레이 디스어셈블리·디컴파일. NDS Loader 커뮤니티 플러그인 활용 |
 
 ### 빌드 파이프라인
 
@@ -331,6 +374,23 @@ NDS ROM(.nds)은 다음 구조다:
 ```
 
 ndstool이 FAT·FNT·헤더를 자동 재계산하므로 파일 크기 변경에 따른 수동 오프셋 조정이 불필요하다. 이것이 NDS 패치의 큰 이점이다.
+
+### ARM9 secure area
+
+ARM9 바이너리의 첫 2KB(ROM 오프셋 0x4000~0x47FF)는 **secure area**로 암호화되어 있다. arm9.bin을 패치하려면 먼저 복호화해야 한다. ndstool의 `-x` 옵션이 추출 시 자동 복호화하고, `-c`로 재조립 시 자동 재암호화한다. 수동으로 ROM을 직접 편집하는 경우 secure area 처리를 별도로 해야 한다.
+
+### 배너 한글 타이틀
+
+NDS 배너(아이콘+타이틀)는 버전에 따라 지원 언어가 다르다.
+
+| 버전 | 추가 언어 |
+|------|-----------|
+| v1 (0x0001) | JP, EN, FR, DE, IT, ES |
+| v2 (0x0002) | + 중국어 (간체) |
+| v3 (0x0003) | + **한국어** (offset 0x0940) |
+| v0103 | + DSi 애니메이션 아이콘 |
+
+한글 패치 배포 시 배너의 한글 타이틀 필드도 수정하면 플래시 카트/홈 메뉴에서 한글 제목이 표시된다. 배너 버전이 v1/v2이면 v3으로 올려야 한글 필드가 인식된다.
 
 ### 배포
 
@@ -428,3 +488,33 @@ NDS 한글 패치는 8/16비트 세대와 비교해 다음 차이가 있다.
 | 빌드 도구 | 게임별 자체 빌드 파이프라인 | ndstool 기반 표준화된 분해/재조립 |
 
 이런 특성 덕분에 NDS는 한글 패치 진입 장벽이 상대적으로 낮은 플랫폼이지만, 게임별 스크립트 포맷·압축·AP의 역공학은 여전히 필요하다. strategy 축의 조사 순서·검증 원칙을 출발점으로 삼되, NDS 고유의 파일시스템·오버레이·VRAM 뱅크 구조에 맞춰 적용한다.
+
+---
+
+## 10. 참조
+
+### 하드웨어·시스템 문서
+
+| 문서 | URL | 용도 |
+|------|-----|------|
+| **GBATEK** (nocash) | https://problemkaputt.de/gbatek.htm | NDS/GBA 종합 레퍼런스. 메모리 맵, ROM 헤더, 비디오, 압축 등 모든 하드웨어 사항의 일차 출처 |
+| GBATEK — DS Memory Maps | GBATEK 내 "DS Memory Control" 섹션 | ARM9/ARM7 주소 공간, TCM, VRAM 뱅크 매핑 |
+| GBATEK — DS Cartridge Header | GBATEK 내 "DS Cartridge Header" 섹션 | ROM 헤더 오프셋 (FNT 0x040, FAT 0x048 등), 배너, secure area |
+| GBATEK — DS Video | GBATEK 내 "DS Video" 섹션 | 2D 엔진, BG 모드, 타일/비트맵, VRAM 뱅크 설정 |
+| GBATEK — DS Compression | GBATEK 내 "DS Compression" 섹션 | LZ77/LZ11/Huffman/RLE 포맷, BIOS SWI 함수 |
+
+### 도구
+
+| 도구 | URL |
+|------|-----|
+| ndstool | https://github.com/devkitPro/ndstool |
+| ndspy | https://github.com/RoadrunnerWMC/ndspy |
+| Tinke | https://github.com/pleonex/tinke |
+| Kuriimu2 | https://github.com/FanTranslatorsInternational/Kuriimu2 |
+| melonDS | https://melonds.kuribo64.net/ |
+| DeSmuME | https://desmume.org/ |
+| no$gba | https://problemkaputt.de/gba.htm |
+| Flips (IPS/BPS) | https://github.com/Alcaro/Flips |
+| xdelta3 | https://github.com/jmacd/xdelta |
+| devkitPro (devkitARM) | https://devkitpro.org/ |
+| Ghidra | https://ghidra-sre.org/ |
